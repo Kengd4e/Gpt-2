@@ -40,8 +40,47 @@ Frame.Position = UDim2.new(0,10,0,50)
 Frame.BackgroundColor3 = Color3.fromRGB(30,30,30)
 Frame.BackgroundTransparency = 0.2
 Frame.BorderSizePixel = 0
-Frame.Active = true
-Frame.Draggable = true
+
+-- Draggable GUI
+local dragging
+local dragInput
+local dragStart
+local startPos
+
+local function update(input)
+    local delta = input.Position - dragStart
+    Frame.Position = UDim2.new(
+        startPos.X.Scale,
+        startPos.X.Offset + delta.X,
+        startPos.Y.Scale,
+        startPos.Y.Offset + delta.Y
+    )
+end
+
+Frame.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+        dragStart = input.Position
+        startPos = Frame.Position
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+            end
+        end)
+    end
+end)
+
+Frame.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseMovement then
+        dragInput = input
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if input == dragInput and dragging then
+        update(input)
+    end
+end)
 
 -- ScrollFrame สำหรับผู้เล่น
 local ScrollFrame = Instance.new("ScrollingFrame", Frame)
@@ -71,11 +110,11 @@ end)
 
 -- UI Helper Functions
 local uiIndex = 0
-local function createToggle(name, default, callback)
+local function createSmallToggle(name, default, callback)
     uiIndex += 1
     local btn = Instance.new("TextButton", Frame)
-    btn.Size = UDim2.new(0.9,0,0,35)
-    btn.Position = UDim2.new(0.05,0,0,(uiIndex-1)*40)
+    btn.Size = UDim2.new(0.4,0,0,25) -- ปรับให้เล็ก
+    btn.Position = UDim2.new(0.05,0,0,(uiIndex-1)*30)
     btn.BackgroundColor3 = Color3.fromRGB(50,50,50)
     btn.TextColor3 = Color3.fromRGB(255,255,255)
     btn.TextScaled = true
@@ -129,11 +168,11 @@ local function createSlider(name, min, max, default, callback)
 end
 
 -- GUI Toggles
-createToggle("AimLock", AimLockEnabled, function(v) AimLockEnabled = v end)
-createToggle("ESP", ESPEnabled, function(v) ESPEnabled = v end)
-createToggle("TeamCheck", TeamCheck, function(v) TeamCheck = v end)
-createToggle("WallCheck", WallCheck, function(v) WallCheck = v end)
-createToggle("FOV Circle", FOVEnabled, function(v) FOVEnabled = v; FOVCircle.Visible = v end)
+createSmallToggle("AimLock", AimLockEnabled, function(v) AimLockEnabled = v end)
+createSmallToggle("ESP", ESPEnabled, function(v) ESPEnabled = v end)
+createSmallToggle("TeamCheck", TeamCheck, function(v) TeamCheck = v end)
+createSmallToggle("WallCheck", WallCheck, function(v) WallCheck = v end)
+createSmallToggle("FOV Circle", FOVEnabled, function(v) FOVEnabled = v; FOVCircle.Visible = v end)
 createSlider("FOV Size", 50, 500, FOV, function(v) FOV = v end)
 createSlider("FOV Transparency", 0, 1, FOVTransparency, function(v) FOVTransparency = v; FOVCircle.Transparency = v end)
 
@@ -144,6 +183,17 @@ local function GetTeamColor(player)
     else
         return Color3.fromRGB(255,0,0)
     end
+end
+
+-- ปรับ ScrollFrame อัตโนมัติ
+local function updateScrollCanvas()
+    local totalHeight = 0
+    for _, child in pairs(ScrollFrame:GetChildren()) do
+        if child:IsA("Frame") then
+            totalHeight = totalHeight + child.Size.Y.Offset + 5
+        end
+    end
+    ScrollFrame.CanvasSize = UDim2.new(0,0,0,totalHeight)
 end
 
 -- Create per-player GUI row
@@ -196,6 +246,8 @@ local function CreatePlayerRow(player)
         PlayerSettings[player].WallCheck = not PlayerSettings[player].WallCheck
         wallBtn.Text = "Wall: " .. (PlayerSettings[player].WallCheck and "ON" or "OFF")
     end)
+
+    updateScrollCanvas()
 end
 
 -- ESP Functions
@@ -265,8 +317,6 @@ RunService.RenderStepped:Connect(function()
                         ESPLabels[player].Position = Vector2.new(screenPos.X,screenPos.Y)
                         local distance = (player.Character.HumanoidRootPart.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude
                         ESPLabels[player].Text = player.Name .. " [" .. math.floor(distance) .. "m]"
-                        
-                        -- ปรับขนาดตัวอักษรตามระยะ
                         local size = math.clamp(50 - distance/2, 10, 50)
                         ESPLabels[player].Size = size
                         ESPLabels[player].Visible = true
