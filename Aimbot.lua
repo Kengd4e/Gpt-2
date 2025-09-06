@@ -1,139 +1,125 @@
--- Roblox Full Aimbot + ESP Highlight + FOV Circle with Centered Stylish GUI
-
+-- Services
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
-local CoreGui = game:GetService("CoreGui")
-
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
 local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
 
--- ====== Settings ======
-local Settings = {
-    AimbotEnabled = true,
-    ESPEnabled = true,
-    TeamCheck = true,
-    WallCheck = true,
-    FOV = 200,
-    TargetPart = "Head"
-}
+-- Settings
+local AimLockEnabled = false
+local ESPEnabled = false
+local TeamCheck = true
+local WallCheck = true
+local FOV = 150
 
--- ====== GUI ======
-local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "AimbotGUI"
-ScreenGui.Parent = CoreGui
+-- ESP Storage
+local ESPBoxes = {}
 
--- ปุ่มเปิด/ปิด GUI
-local ToggleButton = Instance.new("TextButton", ScreenGui)
-ToggleButton.Size = UDim2.new(0, 180, 0, 50)
-ToggleButton.Position = UDim2.new(0.5, -90, 0.05, 0) -- อยู่ตรงกลางด้านบน
-ToggleButton.Text = "Toggle GUI"
-ToggleButton.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
-ToggleButton.TextColor3 = Color3.new(1,1,1)
-ToggleButton.TextScaled = true
-ToggleButton.AutoButtonColor = true
-ToggleButton.BorderSizePixel = 0
-ToggleButton.TextStrokeTransparency = 0.7
+-- FOV Circle
+local FOVCircle = Drawing.new("Circle")
+FOVCircle.Visible = true
+FOVCircle.Color = Color3.fromRGB(255,0,0)
+FOVCircle.Thickness = 2
+FOVCircle.NumSides = 100
 
--- Frame สำหรับฟีเจอร์ทั้งหมด
-local GUIFrame = Instance.new("Frame", ScreenGui)
-GUIFrame.Size = UDim2.new(0, 220, 0, 240)
-GUIFrame.Position = UDim2.new(0.5, -110, 0.5, -120) -- อยู่ตรงกลาง
-GUIFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
-GUIFrame.BorderSizePixel = 0
-GUIFrame.BackgroundTransparency = 0.1
-GUIFrame.ClipsDescendants = true
+-- GUI Creation
+local ScreenGui = Instance.new("ScreenGui", game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui"))
+ScreenGui.ResetOnSpawn = false
 
--- เงารอบกรอบ
-local UICorner = Instance.new("UICorner", GUIFrame)
-UICorner.CornerRadius = UDim.new(0, 15)
+local Frame = Instance.new("Frame", ScreenGui)
+Frame.Size = UDim2.new(0,200,0,250)
+Frame.Position = UDim2.new(0,10,0,50)
+Frame.BackgroundTransparency = 0.5
+Frame.BackgroundColor3 = Color3.fromRGB(20,20,20)
+Frame.BorderSizePixel = 0
+Frame.Active = true
+Frame.Draggable = true
 
-local UIStroke = Instance.new("UIStroke", GUIFrame)
-UIStroke.Thickness = 2
-UIStroke.Transparency = 0.5
-UIStroke.Color = Color3.fromRGB(0, 150, 255)
-
--- ฟังก์ชันสร้างปุ่ม toggle
-local function createToggle(name, default, yPos)
-    local frame = Instance.new("Frame", GUIFrame)
-    frame.Size = UDim2.new(1, -20, 0, 40)
-    frame.Position = UDim2.new(0, 10, 0, yPos)
-    frame.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-    frame.ClipsDescendants = true
-    frame.BorderSizePixel = 0
-    local corner = Instance.new("UICorner", frame)
-    corner.CornerRadius = UDim.new(0,10)
-
-    local label = Instance.new("TextLabel", frame)
-    label.Size = UDim2.new(0.7, 0, 1, 0)
-    label.Text = name
-    label.TextColor3 = Color3.new(1,1,1)
-    label.BackgroundTransparency = 1
-    label.TextScaled = true
-
-    local button = Instance.new("TextButton", frame)
-    button.Size = UDim2.new(0.3, 0, 1, 0)
-    button.Position = UDim2.new(0.7, 0, 0, 0)
-    button.Text = default and "ON" or "OFF"
-    button.BackgroundColor3 = default and Color3.fromRGB(0,200,0) or Color3.fromRGB(200,0,0)
-    button.TextColor3 = Color3.new(1,1,1)
-    button.AutoButtonColor = true
-    local btnCorner = Instance.new("UICorner", button)
-    btnCorner.CornerRadius = UDim.new(0,10)
-    
-    button.MouseButton1Click:Connect(function()
-        local value = button.Text == "OFF"
-        button.Text = value and "ON" or "OFF"
-        button.BackgroundColor3 = value and Color3.fromRGB(0,200,0) or Color3.fromRGB(200,0,0)
-        Settings[name.."Enabled"] = value
+local function createToggle(name, default, callback)
+    local btn = Instance.new("TextButton", Frame)
+    btn.Size = UDim2.new(1, -10, 0, 30)
+    btn.Position = UDim2.new(0, 5, 0, (#Frame:GetChildren()-1)*35)
+    btn.Text = name .. ": " .. (default and "ON" or "OFF")
+    btn.TextColor3 = Color3.fromRGB(255,255,255)
+    btn.BackgroundColor3 = Color3.fromRGB(50,50,50)
+    btn.MouseButton1Click:Connect(function()
+        default = not default
+        btn.Text = name .. ": " .. (default and "ON" or "OFF")
+        callback(default)
     end)
 end
 
--- สร้างปุ่มทั้งหมด
-createToggle("Aimbot", Settings.AimbotEnabled, 10)
-createToggle("ESP", Settings.ESPEnabled, 60)
-createToggle("TeamCheck", Settings.TeamCheck, 110)
-createToggle("WallCheck", Settings.WallCheck, 160)
+-- Toggles
+createToggle("AimLock", AimLockEnabled, function(v) AimLockEnabled = v end)
+createToggle("ESP", ESPEnabled, function(v) ESPEnabled = v end)
+createToggle("TeamCheck", TeamCheck, function(v) TeamCheck = v end)
+createToggle("WallCheck", WallCheck, function(v) WallCheck = v end)
 
--- สลับเปิด/ปิด GUI
-ToggleButton.MouseButton1Click:Connect(function()
-    GUIFrame.Visible = not GUIFrame.Visible
-end)
-
--- ====== FOV Circle ======
-local FOVCircle = Drawing.new("Circle")
-FOVCircle.Visible = true
-FOVCircle.Radius = Settings.FOV
-FOVCircle.Color = Color3.fromRGB(0, 255, 0)
-FOVCircle.Thickness = 2
-FOVCircle.Filled = false
-
--- ====== Helper Functions ======
-local function IsVisible(part)
-    if not Settings.WallCheck then return true end
-    local origin = Camera.CFrame.Position
-    local direction = (part.Position - origin)
-    local ray = Ray.new(origin, direction)
-    local hit, _ = Workspace:FindPartOnRay(ray, LocalPlayer.Character, false, true)
-    return hit == nil
+-- Color Helper
+local function GetTeamColor(player)
+    if player.Team == LocalPlayer.Team then
+        return Color3.fromRGB(0,255,0)
+    else
+        return Color3.fromRGB(255,0,0)
+    end
 end
 
+-- ESP Functions
+local function CreateESP(player)
+    if not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then return end
+    local box = Instance.new("BoxHandleAdornment")
+    box.Adornee = player.Character.HumanoidRootPart
+    box.AlwaysOnTop = true
+    box.ZIndex = 5
+    box.Size = Vector3.new(4,6,2)
+    box.Transparency = 0.5
+    box.Color3 = GetTeamColor(player)
+    box.Parent = Workspace
+    ESPBoxes[player] = box
+end
+
+local function RemoveESP(player)
+    if ESPBoxes[player] then
+        ESPBoxes[player]:Destroy()
+        ESPBoxes[player] = nil
+    end
+end
+
+local function UpdateESP(player)
+    if ESPBoxes[player] then
+        ESPBoxes[player].Color3 = GetTeamColor(player)
+    end
+end
+
+-- Wall Check Function
+local function CanSeeTarget(target)
+    if not WallCheck then return true end
+    local origin = Camera.CFrame.Position
+    local targetPos = target.Character.Head.Position
+    local ray = Ray.new(origin, (targetPos-origin).Unit * (targetPos-origin).Magnitude)
+    local hitPart, _ = Workspace:FindPartOnRayWithIgnoreList(ray, {LocalPlayer.Character})
+    if hitPart then
+        return hitPart:IsDescendantOf(target.Character)
+    end
+    return true
+end
+
+-- Get Closest Target
 local function GetClosestEnemy()
     local closestPlayer = nil
-    local shortestDistance = Settings.FOV
-
+    local shortestDistance = FOV
     for _, player in pairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild(Settings.TargetPart) then
-            if not Settings.TeamCheck or player.Team ~= LocalPlayer.Team then
-                local headPos, onScreen = Camera:WorldToViewportPoint(player.Character[Settings.TargetPart].Position)
-                if onScreen then
-                    local mousePos = UserInputService:GetMouseLocation()
-                    local distance = (Vector2.new(headPos.X, headPos.Y) - Vector2.new(mousePos.X, mousePos.Y)).Magnitude
-                    if distance < shortestDistance and IsVisible(player.Character[Settings.TargetPart]) then
-                        shortestDistance = distance
-                        closestPlayer = player
-                    end
+        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Head") then
+            if TeamCheck and player.Team == LocalPlayer.Team then continue end
+            if not CanSeeTarget(player) then continue end
+            local screenPos, onScreen = Camera:WorldToViewportPoint(player.Character.Head.Position)
+            if onScreen then
+                local distance = (Vector2.new(screenPos.X,screenPos.Y) - Vector2.new(Camera.ViewportSize.X/2,Camera.ViewportSize.Y/2)).Magnitude
+                if distance < shortestDistance then
+                    shortestDistance = distance
+                    closestPlayer = player
                 end
             end
         end
@@ -141,55 +127,39 @@ local function GetClosestEnemy()
     return closestPlayer
 end
 
--- ====== ESP Highlight ======
-local ESPHighlights = {}
-
-local function createHighlight(player)
-    local highlight = Instance.new("Highlight")
-    highlight.FillColor = Color3.fromRGB(255, 0, 0)
-    highlight.OutlineColor = Color3.fromRGB(255, 0, 0)
-    highlight.FillTransparency = 0.5
-    highlight.OutlineTransparency = 0
-    highlight.Parent = player.Character
-    ESPHighlights[player] = highlight
-end
-
-Players.PlayerRemoving:Connect(function(player)
-    if ESPHighlights[player] then
-        ESPHighlights[player]:Destroy()
-        ESPHighlights[player] = nil
-    end
-end)
-
--- ====== Main Loop ======
+-- Main Loop
 RunService.RenderStepped:Connect(function()
-    -- FOV Circle
-    FOVCircle.Position = UserInputService:GetMouseLocation()
-    FOVCircle.Radius = Settings.FOV
-    FOVCircle.Visible = Settings.AimbotEnabled
+    -- Update FOV Circle
+    FOVCircle.Position = Vector2.new(Camera.ViewportSize.X/2,Camera.ViewportSize.Y/2)
+    FOVCircle.Radius = FOV
 
-    -- ESP
+    -- Update ESP
     for _, player in pairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer and player.Character then
-            if Settings.ESPEnabled then
-                if not ESPHighlights[player] then
-                    createHighlight(player)
-                end
-                ESPHighlights[player].Enabled = true
+        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            if TeamCheck and player.Team == LocalPlayer.Team then
+                RemoveESP(player)
             else
-                if ESPHighlights[player] then
-                    ESPHighlights[player].Enabled = false
+                if ESPEnabled then
+                    if not ESPBoxes[player] then
+                        CreateESP(player)
+                    else
+                        UpdateESP(player)
+                    end
                 end
             end
+        else
+            RemoveESP(player)
         end
     end
 
-    -- Aimbot
-    if Settings.AimbotEnabled then
+    -- Aimlock
+    if AimLockEnabled then
         local target = GetClosestEnemy()
-        if target and target.Character and target.Character:FindFirstChild(Settings.TargetPart) then
-            local targetPos = target.Character[Settings.TargetPart].Position
-            Camera.CFrame = CFrame.new(Camera.CFrame.Position, targetPos)
+        if target then
+            Camera.CFrame = CFrame.new(Camera.CFrame.Position, target.Character.Head.Position)
         end
     end
 end)
+
+-- Remove ESP when player leaves
+Players.PlayerRemoving:Connect(RemoveESP)
