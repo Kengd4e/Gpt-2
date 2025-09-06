@@ -7,7 +7,7 @@ local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
 
 -- ================= Key System =================
-local NormalKeys = {["NORMAL"] = true}
+local NormalKeys = {["FREE"] = true}
 local PremiumKeys = {["PREM"] = true}
 
 local function CheckKey(key)
