@@ -1,206 +1,211 @@
-
--- Roblox Aimbot + FOV Circle + ESP (รองรับมือถือ)
--- G = เปิด/ปิด Aimbot
--- FOV Circle แสดงตำแหน่งที่ล็อกได้
--- ESP แสดงศัตรู
-
+-- Services
 local Players = game:GetService("Players")
-local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local StarterGui = game:GetService("StarterGui")
 local Workspace = game:GetService("Workspace")
+local Camera = Workspace.CurrentCamera
 
 local localPlayer = Players.LocalPlayer
-local camera = Workspace.CurrentCamera
 
--- ====== CONFIG ======
-local TOGGLE_KEY = Enum.KeyCode.G   -- ปุ่มเปิด/ปิด aimbot
-local MAX_DIST = math.huge          -- ระยะไม่จำกัด
-local FOV_RADIUS = 120              -- ขนาด FOV
-local AIM_SMOOTHNESS = 0.2          -- ความนุ่มนวลในการเล็ง
-local TEAM_CHECK = true              -- ตรวจทีม (true = ไม่ล็อกเพื่อน)
-local WALL_CHECK = true              -- ตรวจกำแพง (true = ไม่ล็อกผ่านกำแพง)
-local ESP_ENABLED = true             -- เปิด/ปิด ESP
--- =====================
+-- Settings
+local AimbotEnabled = false
+local ESPEnabled = true
+local HighlightEnabled = true
+local FOV = 200
+local TeamCheck = true
+local WallCheck = true
 
-local aimbotEnabled = false
-local target = nil
-local fovCircle, espBoxes = nil, {}
+-- GUI
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "AimbotESPGUI"
+screenGui.Parent = localPlayer:WaitForChild("PlayerGui")
 
--- ====== สร้าง FOV Circle ======
-fovCircle = Drawing.new("Circle")
-fovCircle.Visible = true
-fovCircle.Thickness = 1
-fovCircle.NumSides = 100
-fovCircle.Radius = FOV_RADIUS
-fovCircle.Filled = false
-fovCircle.Color = Color3.fromRGB(0, 255, 0)
-fovCircle.Transparency = 0.8
+-- Buttons
+local toggleAimbot = Instance.new("TextButton")
+toggleAimbot.Size = UDim2.new(0, 120, 0, 50)
+toggleAimbot.Position = UDim2.new(0.05, 0, 0.85, 0)
+toggleAimbot.Text = "Aimbot: OFF"
+toggleAimbot.Parent = screenGui
 
--- ====== ฟังก์ชันช่วย ======
-local function getHead(char)
-	return char and char:FindFirstChild("Head")
+local toggleESP = Instance.new("TextButton")
+toggleESP.Size = UDim2.new(0, 120, 0, 50)
+toggleESP.Position = UDim2.new(0.05, 0, 0.75, 0)
+toggleESP.Text = "ESP: ON"
+toggleESP.Parent = screenGui
+
+local fovButton = Instance.new("TextButton")
+fovButton.Size = UDim2.new(0, 120, 0, 50)
+fovButton.Position = UDim2.new(0.05, 0, 0.65, 0)
+fovButton.Text = "FOV: "..FOV
+fovButton.Parent = screenGui
+
+-- FOV Circle
+local fovCircle = Instance.new("Frame")
+fovCircle.Size = UDim2.new(0, FOV*2, 0, FOV*2)
+fovCircle.Position = UDim2.new(0.5, -FOV, 0.5, -FOV)
+fovCircle.AnchorPoint = Vector2.new(0.5,0.5)
+fovCircle.BackgroundTransparency = 1
+fovCircle.BorderSizePixel = 2
+fovCircle.BorderColor3 = Color3.fromRGB(255,0,0)
+fovCircle.Parent = screenGui
+
+-- Button functionality
+toggleAimbot.MouseButton1Click:Connect(function()
+    AimbotEnabled = not AimbotEnabled
+    toggleAimbot.Text = AimbotEnabled and "Aimbot: ON" or "Aimbot: OFF"
+end)
+
+toggleESP.MouseButton1Click:Connect(function()
+    ESPEnabled = not ESPEnabled
+    toggleESP.Text = ESPEnabled and "ESP: ON" or "ESP: OFF"
+end)
+
+fovButton.MouseButton1Click:Connect(function()
+    FOV = FOV + 50
+    if FOV > 500 then FOV = 50 end
+    fovButton.Text = "FOV: "..FOV
+    fovCircle.Size = UDim2.new(0, FOV*2, 0, FOV*2)
+    fovCircle.Position = UDim2.new(0.5, -FOV, 0.5, -FOV)
+end)
+
+-- ESP & Highlight storage
+local espObjects = {}
+local highlights = {}
+
+local function CreateESP(player)
+    local box = Instance.new("BoxHandleAdornment")
+    box.Adornee = player.Character:FindFirstChild("HumanoidRootPart")
+    box.Size = Vector3.new(2,5,1)
+    box.AlwaysOnTop = true
+    box.ZIndex = 5
+    box.Parent = player.Character
+
+    local nameTag = Instance.new("BillboardGui")
+    nameTag.Adornee = player.Character:FindFirstChild("Head")
+    nameTag.Size = UDim2.new(0,100,0,50)
+    nameTag.AlwaysOnTop = true
+
+    local textLabel = Instance.new("TextLabel")
+    textLabel.Size = UDim2.new(1,0,1,0)
+    textLabel.BackgroundTransparency = 1
+    textLabel.TextScaled = true
+    textLabel.Parent = nameTag
+    nameTag.Parent = player.Character
+
+    espObjects[player] = {box=box, nameTag=textLabel}
+
+    -- Create Highlight
+    local highlight = Instance.new("Highlight")
+    highlight.Adornee = player.Character
+    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    highlight.FillColor = Color3.new(1,0,0)
+    highlight.FillTransparency = 0.5
+    highlight.OutlineColor = Color3.new(1,1,1)
+    highlight.OutlineTransparency = 0
+    highlight.Parent = player.Character
+    highlights[player] = highlight
 end
 
-local function isEnemy(player)
-	if TEAM_CHECK and localPlayer.Team then
-		return player.Team ~= localPlayer.Team
-	end
-	return true
+local function RemoveESP(player)
+    if espObjects[player] then
+        if espObjects[player].box then espObjects[player].box:Destroy() end
+        if espObjects[player].nameTag then espObjects[player].nameTag.Parent:Destroy() end
+        espObjects[player] = nil
+    end
+    if highlights[player] then
+        highlights[player]:Destroy()
+        highlights[player] = nil
+    end
 end
 
-local function worldToScreen(pos)
-	local screenPos, onScreen = camera:WorldToViewportPoint(pos)
-	return Vector2.new(screenPos.X, screenPos.Y), onScreen
+-- Wall check
+local function IsVisible(target)
+    if not WallCheck then return true end
+    local origin = Camera.CFrame.Position
+    local direction = (target.Position - origin).Unit * (target.Position - origin).Magnitude
+    local ray = Ray.new(origin, direction)
+    local hit = Workspace:FindPartOnRayWithIgnoreList(ray, {localPlayer.Character}, false, true)
+    return hit == target.Parent:FindFirstChild("HumanoidRootPart") or hit == nil
 end
 
-local function canSeeTarget(origin, targetPos)
-	if not WALL_CHECK then return true end
-	local ray = Ray.new(origin, (targetPos - origin).Unit * (targetPos - origin).Magnitude)
-	local hitPart = Workspace:FindPartOnRayWithIgnoreList(ray, {localPlayer.Character})
-	return hitPart == nil
+-- Closest target
+local function GetClosestTarget()
+    local closestTarget = nil
+    local shortestDistance = FOV
+
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= localPlayer and player.Character and player.Character:FindFirstChild("Head") then
+            if TeamCheck and player.Team == localPlayer.Team then continue end
+            local headPos, onScreen = Camera:WorldToViewportPoint(player.Character.Head.Position)
+            if onScreen then
+                local mousePos = UserInputService:GetMouseLocation()
+                local distance = (Vector2.new(headPos.X, headPos.Y) - Vector2.new(mousePos.X, mousePos.Y)).Magnitude
+                if distance < shortestDistance and IsVisible(player.Character.Head) then
+                    shortestDistance = distance
+                    closestTarget = player
+                end
+            end
+        end
+    end
+    return closestTarget
 end
 
--- ====== หาเป้าหมายใกล้ FOV ======
-local function getClosestTarget()
-	local myChar = localPlayer.Character
-	local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
-	if not myRoot then return nil end
-
-	local closestPlayer = nil
-	local shortestDistance = math.huge
-
-	for _, plr in ipairs(Players:GetPlayers()) do
-		if plr ~= localPlayer and isEnemy(plr) then
-			local char = plr.Character
-			local head = getHead(char)
-			if char and head then
-				local screenPos, onScreen = worldToScreen(head.Position)
-				if onScreen then
-					local distFromCenter = (Vector2.new(camera.ViewportSize.X/2, camera.ViewportSize.Y/2) - screenPos).Magnitude
-					local worldDist = (myRoot.Position - head.Position).Magnitude
-
-					if distFromCenter <= FOV_RADIUS and worldDist <= MAX_DIST and canSeeTarget(myRoot.Position, head.Position) then
-						if distFromCenter < shortestDistance then
-							shortestDistance = distFromCenter
-							closestPlayer = plr
-						end
-					end
-				end
-			end
-		end
-	end
-
-	return closestPlayer
-end
-
--- ====== สร้าง ESP ======
-local function createESP(plr)
-	if not ESP_ENABLED then return end
-	local box = Drawing.new("Square")
-	box.Visible = true
-	box.Thickness = 1
-	box.Color = Color3.fromRGB(255, 0, 0)
-	box.Filled = false
-	espBoxes[plr] = box
-end
-
-local function updateESP()
-	if not ESP_ENABLED then return end
-	for _, plr in ipairs(Players:GetPlayers()) do
-		if plr ~= localPlayer then
-			local char = plr.Character
-			local head = getHead(char)
-			if char and head then
-				if not espBoxes[plr] then
-					createESP(plr)
-				end
-				local box = espBoxes[plr]
-				local screenPos, onScreen = worldToScreen(head.Position)
-				if onScreen then
-					box.Position = screenPos - Vector2.new(15, 15)
-					box.Size = Vector2.new(30, 30)
-					box.Visible = true
-				else
-					box.Visible = false
-				end
-			end
-		end
-	end
-end
-
--- ====== Aimbot ทำงาน ======
+-- Main loop
 RunService.RenderStepped:Connect(function()
-	-- อัพเดตตำแหน่ง FOV Circle
-	local mouseLocation
-	if UserInputService.TouchEnabled and #UserInputService:GetTouchPositions() > 0 then
-		mouseLocation = UserInputService:GetTouchPositions()[1]
-	else
-		mouseLocation = UserInputService:GetMouseLocation()
-	end
-	fovCircle.Position = mouseLocation
+    -- Aimbot
+    local lockedTarget = nil
+    if AimbotEnabled then
+        local target = GetClosestTarget()
+        if target and target.Character and target.Character:FindFirstChild("Head") then
+            Camera.CFrame = CFrame.new(Camera.CFrame.Position, target.Character.Head.Position)
+            lockedTarget = target
+        end
+    end
 
-	if aimbotEnabled then
-		target = getClosestTarget()
+    -- ESP & Highlight
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= localPlayer and player.Character then
+            if ESPEnabled and (not TeamCheck or player.Team ~= localPlayer.Team) then
+                if not espObjects[player] then
+                    CreateESP(player)
+                end
+                -- Update name + distance
+                local distance = (player.Character.HumanoidRootPart.Position - localPlayer.Character.HumanoidRootPart.Position).Magnitude
+                espObjects[player].nameTag.Text = player.Name.." | "..math.floor(distance).."m"
 
-		if target and target.Character and getHead(target.Character) then
-			local targetHead = getHead(target.Character)
-			local screenPos, onScreen = worldToScreen(targetHead.Position)
-			
-			if onScreen then
-				camera.CFrame = camera.CFrame:Lerp(
-					CFrame.new(camera.CFrame.Position, targetHead.Position),
-					AIM_SMOOTHNESS
-				)
-			end
-		end
-	end
+                -- Color by team and FOV
+                local inFOV = false
+                local headPos, onScreen = Camera:WorldToViewportPoint(player.Character.Head.Position)
+                if onScreen then
+                    local mousePos = UserInputService:GetMouseLocation()
+                    local screenDistance = (Vector2.new(headPos.X, headPos.Y) - Vector2.new(mousePos.X, mousePos.Y)).Magnitude
+                    if screenDistance <= FOV then
+                        inFOV = true
+                    end
+                end
 
-	-- อัพเดต ESP
-	updateESP()
+                if TeamCheck and player.Team == localPlayer.Team then
+                    espObjects[player].box.Color3 = Color3.new(0,1,0)
+                    espObjects[player].nameTag.TextColor3 = Color3.new(0,1,0)
+                    if highlights[player] then highlights[player].FillColor = Color3.new(0,1,0) end
+                elseif player == lockedTarget then
+                    -- Highlight locked target
+                    espObjects[player].box.Color3 = Color3.new(1,0,0)
+                    espObjects[player].nameTag.TextColor3 = Color3.new(1,0,0)
+                    if highlights[player] then highlights[player].FillColor = Color3.new(1,0,0) end
+                elseif inFOV then
+                    espObjects[player].box.Color3 = Color3.new(1,0,0)
+                    espObjects[player].nameTag.TextColor3 = Color3.new(1,0,0)
+                    if highlights[player] then highlights[player].FillColor = Color3.new(1,0,0) end
+                else
+                    espObjects[player].box.Color3 = Color3.new(1,1,0)
+                    espObjects[player].nameTag.TextColor3 = Color3.new(1,1,0)
+                    if highlights[player] then highlights[player].FillColor = Color3.new(1,1,0) end
+                end
+            else
+                RemoveESP(player)
+            end
+        end
+    end
 end)
-
--- ====== Toggle เปิด/ปิด Aimbot ======
-UserInputService.InputBegan:Connect(function(input, gp)
-	if gp then return end
-	if input.KeyCode == TOGGLE_KEY then
-		aimbotEnabled = not aimbotEnabled
-		if aimbotEnabled then
-			fovCircle.Color = Color3.fromRGB(255, 0, 0)
-		else
-			fovCircle.Color = Color3.fromRGB(0, 255, 0)
-			target = nil
-		end
-	end
-end)
-
-
----
-
-✅ คุณสมบัติเด่นของเวอร์ชันนี้:
-
-1. เล็งศัตรูแบบ Smooth
-
-
-2. ระยะไม่จำกัด
-
-
-3. ไม่ล็อกผ่านกำแพง (Wall Check)
-
-
-4. Toggle Team Check
-
-
-5. ESP แสดงศัตรู
-
-
-6. FOV Circle ใช้ได้ทั้ง PC และมือถือ
-
-
-
-
----
-
-ถ้าคุณอยาก ผมสามารถ เพิ่มตัวเลือกให้ปรับขนาด FOV และสี ESP แบบ Dynamic เพื่อให้ปรับได้ระหว่างเล่นด้วย.
-
-คุณอยากให้ผมทำส่วนนี้ต่อไหม?
-
