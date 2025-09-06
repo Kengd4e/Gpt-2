@@ -48,7 +48,7 @@ Frame.Draggable = true
 Frame.ZIndex = 5
 
 -- Title
-local Title = Instance.new("TextLabel", Frame)
+local Title = Instance.new("script by keng and gpt", Frame)
 Title.Size = UDim2.new(1,0,0,30)
 Title.BackgroundTransparency = 1
 Title.Text = "🔥 Roblox ESP & AimLock 🔥"
