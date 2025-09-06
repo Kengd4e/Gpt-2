@@ -1,3 +1,4 @@
+
 -- Services
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -34,7 +35,7 @@ FOVCircle.Transparency = FOVTransparency
 -- GUI
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "Keng_gui"
+ScreenGui.Name = "KengGPT_GUI"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.Parent = PlayerGui
 
@@ -43,8 +44,8 @@ Frame.Size = UDim2.new(0,320,0,450)
 Frame.Position = UDim2.new(0,10,0,50)
 Frame.BackgroundColor3 = Color3.fromRGB(30,30,30)
 Frame.BorderSizePixel = 0
-Frame.Active = true
-Frame.Draggable = true
+Frame.Active = false -- ล็อคไม่ให้ลาก
+Frame.Draggable = false
 Frame.ClipsDescendants = true
 Frame.ZIndex = 5
 Frame.Visible = true
@@ -62,6 +63,7 @@ Title.Font = Enum.Font.GothamBold
 Title.TextStrokeTransparency = 0.7
 Title.ZIndex = 6
 
+-- GUI Toggle Button
 local GuiToggleBtn = Instance.new("TextButton", ScreenGui)
 GuiToggleBtn.Size = UDim2.new(0,120,0,35)
 GuiToggleBtn.Position = UDim2.new(0,10,0,10)
@@ -216,7 +218,7 @@ local function CreatePlayerRow(player)
         espToggle.Text = "ESP: " .. (PlayerSettings[player].ESP and "ON" or "OFF")
         if not PlayerSettings[player].ESP then
             if ESPBoxes[player] then ESPBoxes[player]:Destroy() ESPBoxes[player] = nil end
-            if ESPLabels[player] then ESPLabels[player].Parent:Destroy() ESPLabels[player] = nil end
+            if ESPLabels[player] and ESPLabels[player].Parent then ESPLabels[player].Parent:Destroy() ESPLabels[player] = nil end
         end
     end)
 
@@ -317,82 +319,5 @@ RunService.RenderStepped:Connect(function()
     -- FOV Circle
     FOVCircle.Visible = FOVEnabled
     if FOVEnabled then
-        FOVCircle.Position = Vector2.new(Camera.ViewportSize.X/2,Camera.ViewportSize.Y/2)
-        FOVCircle.Radius = FOV
-    end
+        FOVCircle.Position = Vector2.new(Camera.ViewportSize.X/2,Camera.ViewportSize
 
-    -- Find closest target
-    local closest = nil
-    local shortest = FOV
-    for _, player in pairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Head") and PlayerSettings[player] then
-            if (not PlayerSettings[player].TeamCheck or player.Team ~= LocalPlayer.Team) and CanSeeTarget(player) then
-                local screenPos, onScreen = Camera:WorldToViewportPoint(player.Character.Head.Position)
-                if onScreen then
-                    local dist = (Vector2.new(screenPos.X,screenPos.Y)-Vector2.new(Camera.ViewportSize.X/2,Camera.ViewportSize.Y/2)).Magnitude
-                    if dist < shortest then
-                        shortest = dist
-                        closest = player
-                    end
-                end
-            end
-        end
-    end
-
-    -- Update ESP for all
-    for _, player in pairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-            if not PlayerSettings[player] then CreatePlayerRow(player) end
-            if PlayerSettings[player].ESP and (not PlayerSettings[player].TeamCheck or player.Team ~= LocalPlayer.Team) and CanSeeTarget(player) then
-                CreateESP(player)
-
-                if ESPLabels[player] then
-                    ESPLabels[player].Text = player.Name .. " [".. math.floor((player.Character.HumanoidRootPart.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude) .. "m]"
-                    ESPLabels[player].TextColor3 = GetTeamColor(player)
-                end
-            else
-                RemoveESP(player)
-            end
-
-            -- Highlight box
-            if ESPBoxes[player] then
-                if player == closest then
-                    ESPBoxes[player].Color3 = Color3.fromRGB(255,0,0) -- สีแดงสำหรับล็อคเป้า
-                    ESPBoxes[player].Transparency = 0.3
-                    ESPBoxes[player].Size = Vector3.new(4.5,6.5,2.5)
-                else
-                    ESPBoxes[player].Color3 = GetTeamColor(player)
-                    ESPBoxes[player].Transparency = 0.5
-                    ESPBoxes[player].Size = Vector3.new(4,6,2)
-                end
-            end
-        else
-            RemoveESP(player)
-        end
-    end
-
-    -- AimLock with Prediction
-    if AimLockEnabled and closest and closest.Character and closest.Character:FindFirstChild("Head") then
-        local targetPos = closest.Character.Head.Position
-        local distance = (targetPos - Camera.CFrame.Position).Magnitude
-        local bulletSpeed = BaseBulletSpeed
-        local prediction = targetPos + (closest.Character.HumanoidRootPart.Velocity / bulletSpeed)
-        local dir = (prediction - Camera.CFrame.Position).Unit
-        Camera.CFrame = Camera.CFrame:Lerp(CFrame.new(Camera.CFrame.Position,Camera.CFrame.Position+dir), Smoothness)
-    end
-end)
-
--- Player Connect
-Players.PlayerRemoving:Connect(RemoveESP)
-Players.PlayerAdded:Connect(function(player)
-    player.CharacterAdded:Connect(function()
-        if not PlayerSettings[player] then CreatePlayerRow(player) end
-    end)
-end)
-
--- Create GUI for existing players
-for _, player in pairs(Players:GetPlayers()) do
-    if player ~= LocalPlayer then
-        CreatePlayerRow(player)
-    end
-end
