@@ -16,6 +16,7 @@ local FOV = 150
 local FOVColor = Color3.fromRGB(255,100,100)
 local FOVTransparency = 0.3
 local Smoothness = 0.3
+local BaseBulletSpeed = 300
 
 -- Storage
 local ESPBoxes = {}
@@ -31,26 +32,25 @@ FOVCircle.NumSides = 100
 FOVCircle.Transparency = FOVTransparency
 
 -- GUI
-local ScreenGui = Instance.new("ScreenGui", LocalPlayer:WaitForChild("PlayerGui"))
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "Keng_gui"
 ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = PlayerGui
 
--- Main Frame
 local Frame = Instance.new("Frame", ScreenGui)
 Frame.Size = UDim2.new(0,320,0,450)
 Frame.Position = UDim2.new(0,10,0,50)
 Frame.BackgroundColor3 = Color3.fromRGB(30,30,30)
-Frame.BackgroundTransparency = 0
 Frame.BorderSizePixel = 0
 Frame.Active = true
 Frame.Draggable = true
 Frame.ClipsDescendants = true
-Frame.ZIndex = 2
-
--- Rounded corners
+Frame.ZIndex = 5
+Frame.Visible = true
 local uiCorner = Instance.new("UICorner", Frame)
 uiCorner.CornerRadius = UDim.new(0,10)
 
--- Title
 local Title = Instance.new("TextLabel", Frame)
 Title.Size = UDim2.new(1,0,0,40)
 Title.Position = UDim2.new(0,0,0,0)
@@ -60,13 +60,34 @@ Title.TextColor3 = Color3.fromRGB(255,255,255)
 Title.TextScaled = true
 Title.Font = Enum.Font.GothamBold
 Title.TextStrokeTransparency = 0.7
+Title.ZIndex = 6
 
--- ScrollFrame สำหรับ Player List
+local GuiToggleBtn = Instance.new("TextButton", ScreenGui)
+GuiToggleBtn.Size = UDim2.new(0,120,0,35)
+GuiToggleBtn.Position = UDim2.new(0,10,0,10)
+GuiToggleBtn.BackgroundColor3 = Color3.fromRGB(70,70,70)
+GuiToggleBtn.TextColor3 = Color3.fromRGB(255,255,255)
+GuiToggleBtn.TextScaled = true
+GuiToggleBtn.Font = Enum.Font.GothamBold
+GuiToggleBtn.Text = "Hide GUI"
+GuiToggleBtn.ZIndex = 10
+GuiToggleBtn.Active = true
+GuiToggleBtn.AutoButtonColor = true
+
+local guiVisible = true
+GuiToggleBtn.MouseButton1Click:Connect(function()
+    guiVisible = not guiVisible
+    Frame.Visible = guiVisible
+    GuiToggleBtn.Text = guiVisible and "Hide GUI" or "Show GUI"
+end)
+
+-- ScrollFrame
 local ScrollFrame = Instance.new("ScrollingFrame", Frame)
 ScrollFrame.Size = UDim2.new(1,-10,1,-50)
 ScrollFrame.Position = UDim2.new(0,5,0,45)
 ScrollFrame.BackgroundTransparency = 1
 ScrollFrame.ScrollBarThickness = 6
+ScrollFrame.ZIndex = 5
 
 local listLayout = Instance.new("UIListLayout", ScrollFrame)
 listLayout.SortOrder = Enum.SortOrder.LayoutOrder
@@ -77,25 +98,7 @@ uiPadding.PaddingLeft = UDim.new(0,5)
 uiPadding.PaddingRight = UDim.new(0,5)
 uiPadding.PaddingTop = UDim.new(0,5)
 
--- GUI Toggle Button
-local GuiToggleBtn = Instance.new("TextButton", ScreenGui)
-GuiToggleBtn.Size = UDim2.new(0,120,0,35)
-GuiToggleBtn.Position = UDim2.new(0,10,0,10)
-GuiToggleBtn.BackgroundColor3 = Color3.fromRGB(70,70,70)
-GuiToggleBtn.TextColor3 = Color3.fromRGB(255,255,255)
-GuiToggleBtn.TextScaled = true
-GuiToggleBtn.Text = "Toggle GUI"
-GuiToggleBtn.ZIndex = 10
-GuiToggleBtn.Active = true
-GuiToggleBtn.AutoButtonColor = true
-GuiToggleBtn.Font = Enum.Font.GothamBold
-local guiVisible = true
-GuiToggleBtn.MouseButton1Click:Connect(function()
-    guiVisible = not guiVisible
-    Frame.Visible = guiVisible
-end)
-
--- UI Helper Functions
+-- UI Helper
 local uiIndex = 0
 local function createToggle(name, default, callback)
     uiIndex += 1
@@ -119,7 +122,6 @@ end
 local function createSlider(name, min, max, default, callback)
     uiIndex += 1
     local yPos = (uiIndex-1)*45 + 50
-
     local label = Instance.new("TextLabel", Frame)
     label.Size = UDim2.new(0.9,0,0,20)
     label.Position = UDim2.new(0.05,0,0,yPos)
@@ -180,7 +182,7 @@ local function GetTeamColor(player)
     end
 end
 
--- Create per-player GUI row
+-- Create Player Row
 local function CreatePlayerRow(player)
     local row = Instance.new("Frame", ScrollFrame)
     row.Size = UDim2.new(1,0,0,50)
@@ -214,7 +216,7 @@ local function CreatePlayerRow(player)
         espToggle.Text = "ESP: " .. (PlayerSettings[player].ESP and "ON" or "OFF")
         if not PlayerSettings[player].ESP then
             if ESPBoxes[player] then ESPBoxes[player]:Destroy() ESPBoxes[player] = nil end
-            if ESPLabels[player] then ESPLabels[player]:Destroy() ESPLabels[player] = nil end
+            if ESPLabels[player] then ESPLabels[player].Parent:Destroy() ESPLabels[player] = nil end
         end
     end)
 
@@ -245,7 +247,7 @@ local function CreatePlayerRow(player)
     end)
 end
 
--- ESP / AimLock / FOV Logic
+-- ESP / AimLock Logic
 local function CreateESP(player)
     if not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then return end
     if not PlayerSettings[player] or not PlayerSettings[player].ESP then return end
@@ -285,14 +287,17 @@ local function CreateESP(player)
     end
 end
 
+-- Remove ESP
 local function RemoveESP(player)
     if ESPBoxes[player] then ESPBoxes[player]:Destroy() ESPBoxes[player] = nil end
     if ESPLabels[player] then
         if ESPLabels[player].Parent then ESPLabels[player].Parent:Destroy() end
         ESPLabels[player] = nil
     end
+    PlayerSettings[player] = nil
 end
 
+-- CanSeeTarget
 local function CanSeeTarget(player)
     if not PlayerSettings[player].WallCheck then return true end
     local origin = Camera.CFrame.Position
@@ -309,57 +314,85 @@ end
 
 -- Main Loop
 RunService.RenderStepped:Connect(function()
+    -- FOV Circle
     FOVCircle.Visible = FOVEnabled
     if FOVEnabled then
         FOVCircle.Position = Vector2.new(Camera.ViewportSize.X/2,Camera.ViewportSize.Y/2)
         FOVCircle.Radius = FOV
     end
 
+    -- Find closest target
+    local closest = nil
+    local shortest = FOV
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Head") and PlayerSettings[player] then
+            if (not PlayerSettings[player].TeamCheck or player.Team ~= LocalPlayer.Team) and CanSeeTarget(player) then
+                local screenPos, onScreen = Camera:WorldToViewportPoint(player.Character.Head.Position)
+                if onScreen then
+                    local dist = (Vector2.new(screenPos.X,screenPos.Y)-Vector2.new(Camera.ViewportSize.X/2,Camera.ViewportSize.Y/2)).Magnitude
+                    if dist < shortest then
+                        shortest = dist
+                        closest = player
+                    end
+                end
+            end
+        end
+    end
+
+    -- Update ESP for all
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
             if not PlayerSettings[player] then CreatePlayerRow(player) end
             if PlayerSettings[player].ESP and (not PlayerSettings[player].TeamCheck or player.Team ~= LocalPlayer.Team) and CanSeeTarget(player) then
                 CreateESP(player)
+
                 if ESPLabels[player] then
-                    ESPLabels[player].Text = player.Name .. " [" .. math.floor((player.Character.HumanoidRootPart.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude) .. "m]"
+                    ESPLabels[player].Text = player.Name .. " [".. math.floor((player.Character.HumanoidRootPart.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude) .. "m]"
                     ESPLabels[player].TextColor3 = GetTeamColor(player)
                 end
             else
                 RemoveESP(player)
+            end
+
+            -- Highlight box
+            if ESPBoxes[player] then
+                if player == closest then
+                    ESPBoxes[player].Color3 = Color3.fromRGB(255,0,0) -- สีแดงสำหรับล็อคเป้า
+                    ESPBoxes[player].Transparency = 0.3
+                    ESPBoxes[player].Size = Vector3.new(4.5,6.5,2.5)
+                else
+                    ESPBoxes[player].Color3 = GetTeamColor(player)
+                    ESPBoxes[player].Transparency = 0.5
+                    ESPBoxes[player].Size = Vector3.new(4,6,2)
+                end
             end
         else
             RemoveESP(player)
         end
     end
 
-    -- AimLock
-    if AimLockEnabled then
-        local closest = nil
-        local shortest = FOV
-        for _, player in pairs(Players:GetPlayers()) do
-            if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Head") and PlayerSettings[player] and PlayerSettings[player].ESP then
-                if (not PlayerSettings[player].TeamCheck or player.Team ~= LocalPlayer.Team) and CanSeeTarget(player) then
-                    local screenPos, onScreen = Camera:WorldToViewportPoint(player.Character.Head.Position)
-                    if onScreen then
-                        local dist = (Vector2.new(screenPos.X,screenPos.Y)-Vector2.new(Camera.ViewportSize.X/2,Camera.ViewportSize.Y/2)).Magnitude
-                        if dist < shortest then
-                            shortest = dist
-                            closest = player
-                        end
-                    end
-                end
-            end
-        end
-        if closest then
-            local dir = (closest.Character.Head.Position - Camera.CFrame.Position).Unit
-            Camera.CFrame = Camera.CFrame:Lerp(CFrame.new(Camera.CFrame.Position,Camera.CFrame.Position+dir), Smoothness)
-        end
+    -- AimLock with Prediction
+    if AimLockEnabled and closest and closest.Character and closest.Character:FindFirstChild("Head") then
+        local targetPos = closest.Character.Head.Position
+        local distance = (targetPos - Camera.CFrame.Position).Magnitude
+        local bulletSpeed = BaseBulletSpeed
+        local prediction = targetPos + (closest.Character.HumanoidRootPart.Velocity / bulletSpeed)
+        local dir = (prediction - Camera.CFrame.Position).Unit
+        Camera.CFrame = Camera.CFrame:Lerp(CFrame.new(Camera.CFrame.Position,Camera.CFrame.Position+dir), Smoothness)
     end
 end)
 
+-- Player Connect
 Players.PlayerRemoving:Connect(RemoveESP)
 Players.PlayerAdded:Connect(function(player)
     player.CharacterAdded:Connect(function()
         if not PlayerSettings[player] then CreatePlayerRow(player) end
     end)
 end)
+
+-- Create GUI for existing players
+for _, player in pairs(Players:GetPlayers()) do
+    if player ~= LocalPlayer then
+        CreatePlayerRow(player)
+    end
+end
