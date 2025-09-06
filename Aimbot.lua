@@ -1,323 +1,164 @@
-
 -- Services
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
-local LocalPlayer = Players.LocalPlayer
-local Camera = Workspace.CurrentCamera
 local UserInputService = game:GetService("UserInputService")
 
--- Settings
+local LocalPlayer = Players.LocalPlayer
+local Camera = Workspace.CurrentCamera
+
+-- SETTINGS
 local AimLockEnabled = false
 local ESPEnabled = true
 local TeamCheck = true
 local WallCheck = true
+local PredictionEnabled = true
 local FOVEnabled = true
-local FOV = 150
-local FOVColor = Color3.fromRGB(255,100,100)
-local FOVTransparency = 0.3
-local Smoothness = 0.3
-local BaseBulletSpeed = 300
-
--- Storage
-local ESPBoxes = {}
-local ESPLabels = {}
-local PlayerSettings = {}
-
--- FOV Circle
-local FOVCircle = Drawing.new("Circle")
-FOVCircle.Visible = FOVEnabled
-FOVCircle.Color = FOVColor
-FOVCircle.Thickness = 2
-FOVCircle.NumSides = 100
-FOVCircle.Transparency = FOVTransparency
+local AimKey = Enum.KeyCode.Q
+local TargetPart = "Head"
+local FOVRadius = 100
+local BulletSpeed = 300 -- สามารถปรับอัตโนมัติภายหลัง
 
 -- GUI
-local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "KengGPT_GUI"
+ScreenGui.Parent = game:GetService("CoreGui")
 ScreenGui.ResetOnSpawn = false
-ScreenGui.Parent = PlayerGui
 
-local Frame = Instance.new("Frame", ScreenGui)
-Frame.Size = UDim2.new(0,320,0,450)
-Frame.Position = UDim2.new(0,10,0,50)
+local Frame = Instance.new("Frame")
+Frame.Size = UDim2.new(0, 250, 0, 300)
+Frame.Position = UDim2.new(0.5, -125, 0.5, -150)
 Frame.BackgroundColor3 = Color3.fromRGB(30,30,30)
+Frame.BackgroundTransparency = 0.2
 Frame.BorderSizePixel = 0
-Frame.Active = false -- ล็อคไม่ให้ลาก
-Frame.Draggable = false
-Frame.ClipsDescendants = true
-Frame.ZIndex = 5
-Frame.Visible = true
-local uiCorner = Instance.new("UICorner", Frame)
-uiCorner.CornerRadius = UDim.new(0,10)
+Frame.Parent = ScreenGui
 
-local Title = Instance.new("TextLabel", Frame)
-Title.Size = UDim2.new(1,0,0,40)
-Title.Position = UDim2.new(0,0,0,0)
-Title.BackgroundTransparency = 1
-Title.Text = "Script by Keng and GPT"
+local UIListLayout = Instance.new("UIListLayout", Frame)
+UIListLayout.Padding = UDim.new(0,5)
+UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1,0,0,30)
+Title.Text = "Script by Keng & G"
 Title.TextColor3 = Color3.fromRGB(255,255,255)
-Title.TextScaled = true
-Title.Font = Enum.Font.GothamBold
-Title.TextStrokeTransparency = 0.7
-Title.ZIndex = 6
+Title.BackgroundTransparency = 1
+Title.Parent = Frame
 
--- GUI Toggle Button
-local GuiToggleBtn = Instance.new("TextButton", ScreenGui)
-GuiToggleBtn.Size = UDim2.new(0,120,0,35)
-GuiToggleBtn.Position = UDim2.new(0,10,0,10)
-GuiToggleBtn.BackgroundColor3 = Color3.fromRGB(70,70,70)
-GuiToggleBtn.TextColor3 = Color3.fromRGB(255,255,255)
-GuiToggleBtn.TextScaled = true
-GuiToggleBtn.Font = Enum.Font.GothamBold
-GuiToggleBtn.Text = "Hide GUI"
-GuiToggleBtn.ZIndex = 10
-GuiToggleBtn.Active = true
-GuiToggleBtn.AutoButtonColor = true
-
-local guiVisible = true
-GuiToggleBtn.MouseButton1Click:Connect(function()
-    guiVisible = not guiVisible
-    Frame.Visible = guiVisible
-    GuiToggleBtn.Text = guiVisible and "Hide GUI" or "Show GUI"
-end)
-
--- ScrollFrame
-local ScrollFrame = Instance.new("ScrollingFrame", Frame)
-ScrollFrame.Size = UDim2.new(1,-10,1,-50)
-ScrollFrame.Position = UDim2.new(0,5,0,45)
-ScrollFrame.BackgroundTransparency = 1
-ScrollFrame.ScrollBarThickness = 6
-ScrollFrame.ZIndex = 5
-
-local listLayout = Instance.new("UIListLayout", ScrollFrame)
-listLayout.SortOrder = Enum.SortOrder.LayoutOrder
-listLayout.Padding = UDim.new(0,5)
-
-local uiPadding = Instance.new("UIPadding", ScrollFrame)
-uiPadding.PaddingLeft = UDim.new(0,5)
-uiPadding.PaddingRight = UDim.new(0,5)
-uiPadding.PaddingTop = UDim.new(0,5)
-
--- UI Helper
-local uiIndex = 0
-local function createToggle(name, default, callback)
-    uiIndex += 1
-    local btn = Instance.new("TextButton", Frame)
-    btn.Size = UDim2.new(0.9,0,0,35)
-    btn.Position = UDim2.new(0.05,0,0,(uiIndex-1)*45 + 50)
+-- Toggle Buttons
+local function CreateToggle(name, default, callback)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1,0,0,30)
+    btn.Text = name.." : "..(default and "ON" or "OFF")
     btn.BackgroundColor3 = Color3.fromRGB(50,50,50)
     btn.TextColor3 = Color3.fromRGB(255,255,255)
-    btn.TextScaled = true
-    btn.Text = name .. ": " .. (default and "ON" or "OFF")
-    btn.Font = Enum.Font.Gotham
-    local corner = Instance.new("UICorner", btn)
-    corner.CornerRadius = UDim.new(0,5)
+    btn.Parent = Frame
     btn.MouseButton1Click:Connect(function()
         default = not default
-        btn.Text = name .. ": " .. (default and "ON" or "OFF")
+        btn.Text = name.." : "..(default and "ON" or "OFF")
         callback(default)
     end)
 end
 
-local function createSlider(name, min, max, default, callback)
-    uiIndex += 1
-    local yPos = (uiIndex-1)*45 + 50
-    local label = Instance.new("TextLabel", Frame)
-    label.Size = UDim2.new(0.9,0,0,20)
-    label.Position = UDim2.new(0.05,0,0,yPos)
-    label.BackgroundTransparency = 1
-    label.TextColor3 = Color3.fromRGB(255,255,255)
-    label.TextScaled = true
-    label.Font = Enum.Font.Gotham
-    label.Text = name .. ": " .. default
+CreateToggle("AimLock", AimLockEnabled, function(val) AimLockEnabled = val end)
+CreateToggle("ESP", ESPEnabled, function(val) ESPEnabled = val end)
+CreateToggle("TeamCheck", TeamCheck, function(val) TeamCheck = val end)
+CreateToggle("WallCheck", WallCheck, function(val) WallCheck = val end)
+CreateToggle("Prediction", PredictionEnabled, function(val) PredictionEnabled = val end)
+CreateToggle("FOV", FOVEnabled, function(val) FOVEnabled = val end)
 
-    local slider = Instance.new("Frame", Frame)
-    slider.Size = UDim2.new(0.9,0,0,20)
-    slider.Position = UDim2.new(0.05,0,0,yPos+22)
-    slider.BackgroundColor3 = Color3.fromRGB(80,80,80)
-    slider.BorderSizePixel = 0
-    local corner = Instance.new("UICorner", slider)
-    corner.CornerRadius = UDim.new(0,5)
+-- FOV Circle
+local FOVCircle = Drawing.new("Circle")
+FOVCircle.Visible = true
+FOVCircle.Radius = FOVRadius
+FOVCircle.Color = Color3.fromRGB(200,200,200)
+FOVCircle.Thickness = 1
+FOVCircle.Transparency = 0.5
+FOVCircle.Filled = false
 
-    local fill = Instance.new("Frame", slider)
-    fill.Size = UDim2.new((default-min)/(max-min),0,1,0)
-    fill.BackgroundColor3 = Color3.fromRGB(255,100,100)
-    fill.BorderSizePixel = 0
-    local fillCorner = Instance.new("UICorner", fill)
-    fillCorner.CornerRadius = UDim.new(0,5)
+-- Functions
+local function GetClosestPlayer()
+    local closestPlayer = nil
+    local shortestDistance = FOVRadius
 
-    local dragging = false
-    slider.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = true end
-    end)
-    slider.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
-    end)
-    slider.InputChanged:Connect(function(input)
-        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-            local relativeX = math.clamp(input.Position.X - slider.AbsolutePosition.X, 0, slider.AbsoluteSize.X)
-            local value = min + (relativeX/slider.AbsoluteSize.X)*(max-min)
-            fill.Size = UDim2.new((value-min)/(max-min),0,1,0)
-            callback(value)
-            label.Text = name .. ": " .. math.floor(value)
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild(TargetPart) then
+            if TeamCheck and player.Team == LocalPlayer.Team then continue end
+            local headPos = player.Character[TargetPart].Position
+            local screenPos, onScreen = Camera:WorldToViewportPoint(headPos)
+            if onScreen then
+                local distance = (Vector2.new(screenPos.X, screenPos.Y) - Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)).Magnitude
+                if distance < shortestDistance then
+                    closestPlayer = player
+                    shortestDistance = distance
+                end
+            end
         end
-    end)
-end
-
--- GUI Toggles
-createToggle("AimLock", AimLockEnabled, function(v) AimLockEnabled = v end)
-createToggle("ESP", ESPEnabled, function(v) ESPEnabled = v end)
-createToggle("TeamCheck", TeamCheck, function(v) TeamCheck = v end)
-createToggle("WallCheck", WallCheck, function(v) WallCheck = v end)
-createToggle("FOV Circle", FOVEnabled, function(v) FOVEnabled = v; FOVCircle.Visible = v end)
-createSlider("FOV Size", 50, 500, FOV, function(v) FOV = v end)
-createSlider("FOV Transparency", 0, 1, FOVTransparency, function(v) FOVTransparency = v; FOVCircle.Transparency = v end)
-
--- Color Helper
-local function GetTeamColor(player)
-    if player.Team == LocalPlayer.Team then
-        return Color3.fromRGB(0,255,0)
-    else
-        return Color3.fromRGB(255,0,0)
     end
+
+    return closestPlayer
 end
 
--- Create Player Row
-local function CreatePlayerRow(player)
-    local row = Instance.new("Frame", ScrollFrame)
-    row.Size = UDim2.new(1,0,0,50)
-    row.BackgroundTransparency = 0.3
-    row.BackgroundColor3 = Color3.fromRGB(50,50,50)
-    row.BorderSizePixel = 0
-    local rowCorner = Instance.new("UICorner", row)
-    rowCorner.CornerRadius = UDim.new(0,5)
-
-    local nameLabel = Instance.new("TextLabel", row)
-    nameLabel.Size = UDim2.new(0.5,0,1,0)
-    nameLabel.Text = player.Name
-    nameLabel.TextScaled = true
-    nameLabel.BackgroundTransparency = 1
-    nameLabel.TextColor3 = GetTeamColor(player)
-    nameLabel.Font = Enum.Font.Gotham
-
-    local espToggle = Instance.new("TextButton", row)
-    espToggle.Size = UDim2.new(0.25,0,0.8,0)
-    espToggle.Position = UDim2.new(0.5,0,0.1,0)
-    espToggle.TextScaled = true
-    espToggle.Text = "ESP: ON"
-    espToggle.Font = Enum.Font.Gotham
-    local espCorner = Instance.new("UICorner", espToggle)
-    espCorner.CornerRadius = UDim.new(0,5)
-
-    PlayerSettings[player] = {ESP = true, TeamCheck = true, WallCheck = true}
-
-    espToggle.MouseButton1Click:Connect(function()
-        PlayerSettings[player].ESP = not PlayerSettings[player].ESP
-        espToggle.Text = "ESP: " .. (PlayerSettings[player].ESP and "ON" or "OFF")
-        if not PlayerSettings[player].ESP then
-            if ESPBoxes[player] then ESPBoxes[player]:Destroy() ESPBoxes[player] = nil end
-            if ESPLabels[player] and ESPLabels[player].Parent then ESPLabels[player].Parent:Destroy() ESPLabels[player] = nil end
-        end
-    end)
-
-    local teamBtn = Instance.new("TextButton", row)
-    teamBtn.Size = UDim2.new(0.25,0,0.4,0)
-    teamBtn.Position = UDim2.new(0.75,0,0.1,0)
-    teamBtn.TextScaled = true
-    teamBtn.Text = "Team: ON"
-    teamBtn.Font = Enum.Font.Gotham
-    local teamCorner = Instance.new("UICorner", teamBtn)
-    teamCorner.CornerRadius = UDim.new(0,5)
-    teamBtn.MouseButton1Click:Connect(function()
-        PlayerSettings[player].TeamCheck = not PlayerSettings[player].TeamCheck
-        teamBtn.Text = "Team: " .. (PlayerSettings[player].TeamCheck and "ON" or "OFF")
-    end)
-
-    local wallBtn = Instance.new("TextButton", row)
-    wallBtn.Size = UDim2.new(0.25,0,0.4,0)
-    wallBtn.Position = UDim2.new(0.75,0,0.5,0)
-    wallBtn.TextScaled = true
-    wallBtn.Text = "Wall: ON"
-    wallBtn.Font = Enum.Font.Gotham
-    local wallCorner = Instance.new("UICorner", wallBtn)
-    wallCorner.CornerRadius = UDim.new(0,5)
-    wallBtn.MouseButton1Click:Connect(function()
-        PlayerSettings[player].WallCheck = not PlayerSettings[player].WallCheck
-        wallBtn.Text = "Wall: " .. (PlayerSettings[player].WallCheck and "ON" or "OFF")
-    end)
+-- Prediction
+local function PredictPosition(target)
+    if not PredictionEnabled then return target.Position end
+    local velocity = target:FindFirstChild("HumanoidRootPart") and target.HumanoidRootPart.Velocity or Vector3.new()
+    local distance = (Camera.CFrame.Position - target.Position).Magnitude
+    local travelTime = distance / BulletSpeed
+    return target.Position + velocity * travelTime
 end
 
--- ESP / AimLock Logic
+-- AimLock
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.KeyCode == AimKey then
+        AimLockEnabled = not AimLockEnabled
+    end
+end)
+
+-- ESP Highlight
+local ESPFolder = Instance.new("Folder", Workspace)
+ESPFolder.Name = "ESP"
+
 local function CreateESP(player)
-    if not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then return end
-    if not PlayerSettings[player] or not PlayerSettings[player].ESP then return end
-
-    -- Box
-    if not ESPBoxes[player] then
-        local box = Instance.new("BoxHandleAdornment")
-        box.Adornee = player.Character.HumanoidRootPart
-        box.AlwaysOnTop = true
-        box.ZIndex = 5
-        box.Size = Vector3.new(4,6,2)
-        box.Transparency = 0.5
-        box.Color3 = GetTeamColor(player)
-        box.Parent = Workspace
-        ESPBoxes[player] = box
-    end
-
-    -- BillboardGui Label
-    if not ESPLabels[player] then
-        local billboard = Instance.new("BillboardGui", player.Character)
-        billboard.Name = "ESPLabel"
-        billboard.Adornee = player.Character.Head
-        billboard.Size = UDim2.new(0,100,0,40)
-        billboard.StudsOffset = Vector3.new(0,2,0)
-        billboard.AlwaysOnTop = true
-
-        local textLabel = Instance.new("TextLabel", billboard)
-        textLabel.Size = UDim2.new(1,0,1,0)
-        textLabel.BackgroundTransparency = 1
-        textLabel.TextColor3 = GetTeamColor(player)
-        textLabel.TextStrokeTransparency = 0.5
-        textLabel.TextScaled = true
-        textLabel.Font = Enum.Font.GothamBold
-        textLabel.Text = player.Name
-
-        ESPLabels[player] = textLabel
-    end
+    local highlight = Instance.new("Highlight")
+    highlight.FillColor = Color3.fromRGB(255,0,0)
+    highlight.FillTransparency = 0.5
+    highlight.OutlineTransparency = 1
+    highlight.Adornee = player.Character
+    highlight.Parent = ESPFolder
+    return highlight
 end
 
--- Remove ESP
-local function RemoveESP(player)
-    if ESPBoxes[player] then ESPBoxes[player]:Destroy() ESPBoxes[player] = nil end
-    if ESPLabels[player] then
-        if ESPLabels[player].Parent then ESPLabels[player].Parent:Destroy() end
-        ESPLabels[player] = nil
-    end
-    PlayerSettings[player] = nil
-end
-
--- CanSeeTarget
-local function CanSeeTarget(player)
-    if not PlayerSettings[player].WallCheck then return true end
-    local origin = Camera.CFrame.Position
-    local direction = (player.Character.Head.Position - origin)
-    local params = RaycastParams.new()
-    params.FilterDescendantsInstances = {LocalPlayer.Character}
-    params.FilterType = Enum.RaycastFilterType.Blacklist
-    local result = Workspace:Raycast(origin,direction,params)
-    if result then
-        return result.Instance:IsDescendantOf(player.Character)
-    end
-    return true
-end
-
--- Main Loop
+local ESPTable = {}
 RunService.RenderStepped:Connect(function()
-    -- FOV Circle
-    FOVCircle.Visible = FOVEnabled
+    -- Update FOV Circle
     if FOVEnabled then
-        FOVCircle.Position = Vector2.new(Camera.ViewportSize.X/2,Camera.ViewportSize
+        FOVCircle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
+        FOVCircle.Visible = true
+    else
+        FOVCircle.Visible = false
+    end
 
+    -- AimLock
+    if AimLockEnabled then
+        local target = GetClosestPlayer()
+        if target and target.Character and target.Character:FindFirstChild(TargetPart) then
+            Camera.CFrame = CFrame.lookAt(Camera.CFrame.Position, PredictPosition(target.Character[TargetPart]))
+        end
+    end
+
+    -- ESP
+    if ESPEnabled then
+        for _, player in pairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer and player.Character then
+                if not ESPTable[player] then
+                    ESPTable[player] = CreateESP(player)
+                end
+            end
+        end
+    else
+        for _, highlight in pairs(ESPTable) do
+            highlight:Destroy()
+        end
+        ESPTable = {}
+    end
+end)
